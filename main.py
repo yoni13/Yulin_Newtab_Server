@@ -38,6 +38,10 @@ def sendmail(sendto):
     #  mail.send:寄出郵件
     mail.send(msg)
 
+@app.route('/')
+def test():
+    return jsonify({'status':'ok'})
+
 @app.route('/createacc', methods=['POST'])
 def createacc():
     if request.method == 'POST':
