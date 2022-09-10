@@ -4,7 +4,8 @@ load_dotenv(override=True)
 from flask import Flask, render_template,request, redirect,make_response,jsonify
 import pymongo
 client = pymongo.MongoClient(os.getenv('MONGO_URL'))
-votedb = client['userdb']
+userdb = client['userdb']
+signupdb = client['signupdb']
 from flask_mail import Mail,Message
 app = Flask(__name__)
 app.config.update(
@@ -40,10 +41,15 @@ def sendmail(sendto):
 @app.route('/createacc', methods=['POST'])
 def createacc():
     if request.method == 'POST':
-        name = request.form['name']
         email = request.form['email']
-        password = request.form['password']
-        votedb['user'].insert_one({'name':name,'email':email,'verify':False,'top':'','bottom':'','down':'','topcolor':'','bottomcolor':'','downcolor':''})
-        return jsonify({'status':'success'})
+        password = hash(request.form['password'])
+        if userdb['user'].find_one({'email':email}) == None:
+            userdb['user'].insert_one({'email':email,'password':password})
+            sendmail(email)
+            return jsonify({'status':'success'})
+        
+        else:
+            return jsonify({'status':'alweady exist'})
+        
 if __name__ == '__main__':
     app.run()
