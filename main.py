@@ -2,7 +2,7 @@ import time,os
 import random, string
 from dotenv import load_dotenv
 load_dotenv(override=True)
-from flask import Flask, render_template,request, redirect,make_response,jsonify
+from flask import Flask, abort, render_template,request, redirect,make_response,jsonify
 import pymongo
 client = pymongo.MongoClient(os.getenv('MONGO_URL'))
 userdb = client['userdb']
@@ -25,7 +25,7 @@ def sendmail(sendto,randomkey):
     #  主旨
     msg_title = 'Sign Up:Yulin NewTab sync services'
     #  寄件者，若參數有設置就不需再另外設置
-    msg_sender = 'event@legendyang.me'
+    msg_sender = 'Yulin NewTab Sync Services','yulinnewtab_signup@legendyang.me'
     #  收件者，格式為list，否則報錯
     msg_recipients = [sendto]
     #  郵件內容
@@ -43,16 +43,29 @@ def sendmail(sendto,randomkey):
 
 @app.route('/')
 def test():
-    return jsonify({'status':'ok'})
-
-@app.route('/createacc', methods=['POST'])
+    return jsonify({'status':'ok'}),200
+@app.route('/vertify',methods=['GET'])  # type: ignore
+def vertify():
+    if signupdb['signup'].find_one({'randomkey':request.args.get('key')}) != None:
+        for i in signupdb['signup'].find({'randomkey':request.args.get('key')}):
+            if round (time.time()) - i['time'] < 1800:
+                userid = ''.join(random.choice(string.ascii_letters + string.digits) for x in range(50))
+                userdb['user'].insert_one({'email':i['email'],'password':i['password'],'userid':userid,'acc_create_t':time.time(),'top':'','middle':'','bottom':'','topcolor':'','middlecolor':'','bottomcolor':'','topimg':'','middleimg':'','bottomimg':'','topimgcolor':'','middleimgcolor':'','bottomimgcolor':'','weather':''})
+                signupdb['signup'].delete_one({'email':i['email']})
+                return render_template('success.html')
+            else:
+                signupdb['signup'].delete_one({'email':i['email']})
+                return render_template('timeout.html')
+    else:
+        return abort(404)
+@app.route('/createacc',methods=['POST'])  # type: ignore
 def createacc():
     if request.method == 'POST':
         email = request.values['email']
         password = hash(request.values['password'])
-        if password == False:
+        if password == '':
             return jsonify({'status':'error','msg':'where is your password????'})
-        if email == False:
+        if email == '':
             return jsonify({'status':'error','msg':'where is your email????'})
         if '@' not in email:
             return jsonify({'status':'error','msg':'email is not valid'})
@@ -60,6 +73,7 @@ def createacc():
             return jsonify({'status':'error','msg':'password is too short'})
         if userdb['user'].find_one({'email':email}) == None:
             randomkey = ''.join(random.choice(string.ascii_letters + string.digits) for x in range(999))
+            signupdb['signup'].delete_one({'email':email})
             signupdb['signup'].insert_one({'email':email,'password':password,'randomkey':randomkey,'time':time.time()})
             result = sendmail(email,randomkey)
             return jsonify({'status':'success','msg':str(result)})
