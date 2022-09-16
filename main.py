@@ -1,4 +1,5 @@
 import time,os
+import random, string
 from dotenv import load_dotenv
 load_dotenv(override=True)
 from flask import Flask, render_template,request, redirect,make_response,jsonify
@@ -20,7 +21,7 @@ app.config.update(
 mail = Mail(app)
 mail.init_app(app)
 
-def sendmail(sendto):
+def sendmail(sendto,randomkey):
     #  主旨
     msg_title = 'Sign Up:Yulin NewTab sync services'
     #  寄件者，若參數有設置就不需再另外設置
@@ -29,14 +30,16 @@ def sendmail(sendto):
     msg_recipients = [sendto]
     #  郵件內容
     #  也可以使用html
-    msg_html = '<h1>Hello, this is Yulin NewTab sync services. Please click the link below to verify your email address. https://newtab.yulin.tw/verify?email='+sendto+'</h1>'
+    msg_html = render_template('mail.html',randomkey=randomkey)
     msg = Message(msg_title,
                   sender=msg_sender,
                   recipients=msg_recipients)
     msg.html = msg_html
     
     #  mail.send:寄出郵件
+    
     mail.send(msg)
+    return 'email sent successfully if the email is correct'
 
 @app.route('/')
 def test():
@@ -45,15 +48,23 @@ def test():
 @app.route('/createacc', methods=['POST'])
 def createacc():
     if request.method == 'POST':
-        email = request.form['email']
-        password = hash(request.form['password'])
+        email = request.values['email']
+        password = hash(request.values['password'])
+        if password == False:
+            return jsonify({'status':'error','msg':'where is your password????'})
+        if email == False:
+            return jsonify({'status':'error','msg':'where is your email????'})
+        if '@' not in email:
+            return jsonify({'status':'error','msg':'email is not valid'})
+        if len(str(request.values['password'])) < 5:
+            return jsonify({'status':'error','msg':'password is too short'})
         if userdb['user'].find_one({'email':email}) == None:
-            userdb['user'].insert_one({'email':email,'password':password})
-            sendmail(email)
-            return jsonify({'status':'success'})
-        
+            randomkey = ''.join(random.choice(string.ascii_letters + string.digits) for x in range(999))
+            signupdb['signup'].insert_one({'email':email,'password':password,'randomkey':randomkey,'time':time.time()})
+            result = sendmail(email,randomkey)
+            return jsonify({'status':'success','msg':str(result)})
         else:
-            return jsonify({'status':'alweady exist'})
+            return jsonify({'status':'erorr','msg':'account alweady exist'})
         
 if __name__ == '__main__':
-    app.run()
+    app.run(port=80,host='0.0.0.0')
