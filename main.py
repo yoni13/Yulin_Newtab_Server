@@ -1,4 +1,3 @@
-from multiprocessing.resource_tracker import ResourceTracker
 import time,os
 import random, string
 from dotenv import load_dotenv
