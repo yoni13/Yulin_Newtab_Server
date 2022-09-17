@@ -4,4 +4,3 @@ python-dotenv
 flask-mail
 pymongo[srv]
 gunicorn
-multiprocessing
