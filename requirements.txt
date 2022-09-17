@@ -3,5 +3,5 @@ pymongo
 python-dotenv
 flask-mail
 pymongo[srv]
-gunicorn
+gunicorn3
 multiprocessing
