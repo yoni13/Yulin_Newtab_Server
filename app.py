@@ -7,6 +7,7 @@ import pymongo
 client = pymongo.MongoClient(os.getenv('MONGO_URL'))
 userdb = client['userdb']
 signupdb = client['signupdb']
+forgetpassdb = client['forgetpass']
 from flask_mail import Mail,Message
 app = Flask(__name__)
 app.config.update(
@@ -43,6 +44,7 @@ def sendmail(sendto,randomkey):
 
 @app.route('/')
 def test():
+    
     return jsonify({'status':'ok'}),200
 @app.route('/vertify',methods=['GET'])  # type: ignore
 def vertify():
@@ -79,6 +81,6 @@ def createacc():
             return jsonify({'status':'success','msg':str(result)})
         else:
             return jsonify({'status':'erorr','msg':'account alweady exist'})
-        
+
 if __name__ == '__main__':
     app.run(port=80,host='0.0.0.0')
