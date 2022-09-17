@@ -8,6 +8,7 @@ client = pymongo.MongoClient(os.getenv('MONGO_URL'))
 userdb = client['userdb']
 signupdb = client['signupdb']
 forgetpassdb = client['forgetpass']
+deleteaccdb = client['deleteacc']
 from flask_mail import Mail,Message
 app = Flask(__name__)
 app.config.update(
@@ -62,6 +63,26 @@ def resetrequest(sendto,randomkey):
     mail.send(msg)
     return 'reset request sent'    
 
+def deleteacc(sendto,randomkey):
+    #  主旨
+    msg_title = 'Delete Account:Yulin NewTab sync services'
+    #  寄件者，若參數有設置就不需再另外設置
+    msg_sender = 'Yulin NewTab Sync Services','yulinnewtab_signup@legendyang.me'
+    #  收件者，格式為list，否則報錯
+    msg_recipients = [sendto]
+    #  郵件內容
+    #  也可以使用html
+    msg_html = render_template('deletemail.html',randomkey=randomkey)
+    msg = Message(msg_title,
+                  sender=msg_sender,
+                  recipients=msg_recipients)
+    msg.html = msg_html
+    
+    #  mail.send:寄出郵件
+    
+    mail.send(msg)
+    return 'delete request sent'    
+
 @app.errorhandler(500)
 def page_not_found(e):
     # note that we set the 500 status explicitly
@@ -75,6 +96,8 @@ def test():
         signupdb['signup'].delete_many({'_id':i['_id']})
     for i in forgetpassdb['forgetpass'].find({'time':{'$lt':expires}}):#sign up request expired
         forgetpassdb['forgetpass'].delete_many({'_id':i['_id']})
+    for i in deleteaccdb['deleteacc'].find({'time':{'$lt':expires}}):#sign up request expired
+        deleteaccdb['deleteacc'].delete_many({'_id':i['_id']})
     return jsonify({'status':'ok'}),200
 
 @app.route('/reset',methods=['GET','POST'])  # type: ignore
@@ -88,7 +111,8 @@ def reset():
                     if len(request.form['password']) < 5:
                         return '''<script>alert('Password too short')</script>''' + render_template('reset.html')
                     else:
-                        userdb['user'].update_one({'email':i['email']},{'$set':{'password':hash(request.form.get('password'))}})
+                        print(request.form['password'])
+                        userdb['user'].update_one({'email':i['email']},{'$set':{'password':hash(request.form['password'])}})
                         forgetpassdb['forgetpass'].delete_one({'email':i['email']})
                         return render_template('resetdone.html')
             else:
@@ -153,5 +177,42 @@ def forgetpass():
         response = resetrequest(email,randomkey)
         return jsonify({'status':'success','msg':response})
     
+@app.route('/deleteacc',methods=['POST'])  # type: ignore
+def deletea():
+    email = request.values['email']
+    password = request.values['password']
+    if email == '':
+        return jsonify({'status':'error','msg':'where is your email????'})
+    if password == '':
+        return jsonify({'status':'error','msg':'where is your password????'})
+    if '@' not in email:
+        return jsonify({'status':'erorr','msg':'email is not vaid'})
+    if userdb['user'].find_one({'email':email}) == None:
+        return jsonify({'status':'error','msg':'account not found'})
+    for i in userdb['user'].find({'email':email}):
+        if i['password'] == hash(password):
+            randomkey = ''.join(random.choice(string.ascii_letters + string.digits) for x in range(999))
+            deleteaccdb['deleteacc'].insert_one({'email':email,'randomkey':randomkey,'time':time.time()})
+            response = deleteacc(email,randomkey)
+            return jsonify({'status':'success','msg':response})
+        else:
+            return jsonify({'status':'error','msg':'password is wrong'})
+
+
+@app.route('/delete',methods=['GET'])  # type: ignore
+def deletesuccess():
+    if deleteaccdb['deleteacc'].find_one({'randomkey':request.args.get('key')}) != None:
+        for i in deleteaccdb['deleteacc'].find({'randomkey':request.args.get('key')}):
+            if round (time.time()) - i['time'] < 1800:
+                userdb['user'].delete_one({'email':i['email']})
+                deleteaccdb['deleteacc'].delete_one({'email':i['email']})
+                return render_template('deleterequest.html')
+            else:
+                deleteaccdb['deleteacc'].delete_one({'email':i['email']})
+                return render_template('timeout.html')
+    else:
+        return abort(404)
+
+
 if __name__ == '__main__':
     app.run(port=80,host='0.0.0.0')
