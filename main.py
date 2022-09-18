@@ -1,3 +1,4 @@
+import email
 import bcrypt
 import time,os
 import random, string
@@ -108,6 +109,8 @@ def test():
         forgetpassdb['forgetpass'].delete_many({'_id':i['_id']})
     for i in deleteaccdb['deleteacc'].find({'time':{'$lt':expires}}):#sign up request expired
         deleteaccdb['deleteacc'].delete_many({'_id':i['_id']})
+    for i in sessiondb['session'].find({'time':{'$lt':expires}}):#sign up request expired
+        sessiondb['session'].delete_many({'_id':i['_id']})
     return jsonify({'status':'ok'}),200
 
 @app.route('/reset',methods=['GET','POST'])  # type: ignore
@@ -245,6 +248,26 @@ def login():
             return jsonify({'status':'success','msg':'login success','sessionid':randomkey})
         else:
             return jsonify({'status':'error','msg':'password is wrong'})
+@app.route('/getdata',methods=['POST'])  # type: ignore
+def getdata():
+    sessionid = request.values['sessionid']
+    if sessiondb['session'].find_one({'sessionid':sessionid}) == None:
+        return jsonify({'status':'error','msg':'sessionid not found'})
+    for i in sessiondb['session'].find({'sessionid':sessionid}):
+        if round(time.time()) - i['time'] < 31356926 :#1 year
+            email = i['email']
+            for d in userdb['user'].find({'email':email}):
+                top = d['top']
+                middle = d['middle']
+                bottom = d['bottom']
+                topcolor = d['topcolor']
+                middlecolor = d['middlecolor']
+                bottomcolor = d['bottomcolor']
+                searchprovider = d['searchprovider']
+                return jsonify({'status':'success','msg':'sessionid found','top':top,'middle':middle,'bottom':bottom,'topcolor':topcolor,'middlecolor':middlecolor,'bottomcolor':bottomcolor,'searchprovider':searchprovider})
+        else:
+            sessiondb['session'].delete_one({'sessionid':sessionid})
+            return jsonify({'status':'error','msg':'sessionid timeout'})
 
 if __name__ == '__main__':
     app.run(port=80,host='0.0.0.0',debug=True)
