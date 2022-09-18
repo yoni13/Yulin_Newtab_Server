@@ -4,3 +4,4 @@ python-dotenv
 flask-mail
 pymongo[srv]
 gunicorn
+py-bcrypt

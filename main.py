@@ -1,3 +1,4 @@
+import bcrypt
 import time,os
 import random, string
 from dotenv import load_dotenv
@@ -9,9 +10,88 @@ userdb = client['userdb']
 signupdb = client['signupdb']
 forgetpassdb = client['forgetpass']
 deleteaccdb = client['deleteacc']
+saltdb = client['salt']
+saltfrom = saltdb['salt'].find({'name':'salt'})
+for i in saltfrom:
+    global salt
+    salt = i['salt']
 from flask import Flask, render_template
 app = Flask(__name__)
-from init import sendmail,resetrequest,deleteacc
+app.config.update(
+    DEBUG=False,
+    # EMAIL SETTINGS
+    MAIL_SERVER='smtp.gmail.com',
+    MAIL_PORT=465,
+    MAIL_USE_SSL=True,
+    MAIL_USERNAME = os.getenv('MAIL_USERNAME'),
+    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
+)
+from flask_mail import Mail,Message
+mail = Mail(app)
+mail.init_app(app)
+def sendmail(sendto,randomkey):
+    #  主旨
+    msg_title = 'Sign Up:Yulin NewTab sync services'
+    #  寄件者，若參數有設置就不需再另外設置
+    msg_sender = 'Yulin NewTab Sync Services','yulinnewtab_signup@legendyang.me'
+    #  收件者，格式為list，否則報錯
+    msg_recipients = [sendto]
+    #  郵件內容
+    #  也可以使用html
+    msg_html = render_template('signupemail.html',randomkey=randomkey)
+    msg = Message(msg_title,
+                  sender=msg_sender,
+                  recipients=msg_recipients)
+    msg.html = msg_html
+    
+    #  mail.send:寄出郵件
+    
+    mail.send(msg)
+    return 'email sent successfully if the email is correct'
+
+def resetrequest(sendto,randomkey):
+    #  主旨
+    msg_title = 'Forget Password:Yulin NewTab sync services'
+    #  寄件者，若參數有設置就不需再另外設置
+    msg_sender = 'Yulin NewTab Sync Services','yulinnewtab_signup@legendyang.me'
+    #  收件者，格式為list，否則報錯
+    msg_recipients = [sendto]
+    #  郵件內容
+    #  也可以使用html
+    msg_html = render_template('resetpass.html',randomkey=randomkey)
+    msg = Message(msg_title,
+                  sender=msg_sender,
+                  recipients=msg_recipients)
+    msg.html = msg_html
+    
+    #  mail.send:寄出郵件
+    
+    mail.send(msg)
+    return 'reset request sent'    
+
+def deleteacc(sendto,randomkey):
+    #  主旨
+    msg_title = 'Delete Account:Yulin NewTab sync services'
+    #  寄件者，若參數有設置就不需再另外設置
+    msg_sender = 'Yulin NewTab Sync Services','yulinnewtab_signup@legendyang.me'
+    #  收件者，格式為list，否則報錯
+    msg_recipients = [sendto]
+    #  郵件內容
+    #  也可以使用html
+    msg_html = render_template('deletemail.html',randomkey=randomkey)
+    msg = Message(msg_title,
+                  sender=msg_sender,
+                  recipients=msg_recipients)
+    msg.html = msg_html
+    
+    #  mail.send:寄出郵件
+    
+    mail.send(msg)
+    return 'delete request sent'    
+
+
+
+
 @app.errorhandler(500)
 def page_not_found(e):
     # note that we set the 500 status explicitly
@@ -40,7 +120,8 @@ def reset():
                     if len(request.form['password']) < 5:
                         return '''<script>alert('Password too short')</script>''' + render_template('reset.html')
                     else:
-                        userdb['user'].update_one({'email':i['email']},{'$set':{'password':hash(request.form['password'])}})
+                        hashed = bcrypt.hashpw(request.form['password'].encode('utf-8'),salt)
+                        userdb['user'].update_one({'email':i['email']},{'$set':{'password':hashed}})
                         forgetpassdb['forgetpass'].delete_one({'email':i['email']})
                         return render_template('resetdone.html')
             else:
@@ -71,7 +152,7 @@ def vertify():
 def createacc():
     if request.method == 'POST':
         email = request.values['email']
-        password = hash(request.values['password'])
+        password = request.values['password']
         if password == '':
             return jsonify({'status':'error','msg':'where is your password????'})
         if email == '':
@@ -82,8 +163,9 @@ def createacc():
             return jsonify({'status':'error','msg':'password is too short'})
         if userdb['user'].find_one({'email':email}) == None:
             randomkey = ''.join(random.choice(string.ascii_letters + string.digits) for x in range(999))
-            signupdb['signup'].delete_one({'email':email})
-            signupdb['signup'].insert_one({'email':email,'password':password,'randomkey':randomkey,'time':time.time()})
+            signupdb['signup'].delete_many({'email':email})
+            hashed = bcrypt.hashpw(password.encode('utf-8'),salt)
+            signupdb['signup'].insert_one({'email':email,'password':hashed,'randomkey':randomkey,'time':time.time()})
             result = sendmail(email,randomkey)
             return jsonify({'status':'success','msg':str(result)})
         else:
@@ -118,10 +200,8 @@ def deletea():
     if userdb['user'].find_one({'email':email}) == None:
         return jsonify({'status':'error','msg':'account not found'})
     for i in userdb['user'].find({'email':email}):
-        print(i['password'])
-        print(password)
-        print(hash(password))
-        if i['password'] == hash(password):
+        hashed = bcrypt.hashpw(password.encode('utf-8'),salt)
+        if i['password'] == hashed:
             randomkey = ''.join(random.choice(string.ascii_letters + string.digits) for x in range(999))
             deleteaccdb['deleteacc'].insert_one({'email':email,'randomkey':randomkey,'time':time.time()})
             response = deleteacc(email,randomkey)
@@ -146,4 +226,4 @@ def deletesuccess():
 
 
 if __name__ == '__main__':
-    app.run(port=80,host='0.0.0.0')
+    app.run(port=80,host='0.0.0.0',debug=True)
