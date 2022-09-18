@@ -248,6 +248,7 @@ def login():
             return jsonify({'status':'success','msg':'login success','sessionid':randomkey})
         else:
             return jsonify({'status':'error','msg':'password is wrong'})
+
 @app.route('/getdata',methods=['POST'])  # type: ignore
 def getdata():
     sessionid = request.values['sessionid']
@@ -265,6 +266,19 @@ def getdata():
                 bottomcolor = d['bottomcolor']
                 searchprovider = d['searchprovider']
                 return jsonify({'status':'success','msg':'sessionid found','top':top,'middle':middle,'bottom':bottom,'topcolor':topcolor,'middlecolor':middlecolor,'bottomcolor':bottomcolor,'searchprovider':searchprovider})
+        else:
+            sessiondb['session'].delete_one({'sessionid':sessionid})
+            return jsonify({'status':'error','msg':'sessionid timeout'})
+
+@app.route('/deletesession',methods=['POST'])  # type: ignore
+def deletesession():
+    sessionid = request.values['sessionid']
+    if sessiondb['session'].find_one({'sessionid':sessionid}) == None:
+        return jsonify({'status':'error','msg':'sessionid not found'})
+    for i in sessiondb['session'].find({'sessionid':sessionid}):
+        if round(time.time()) - i['time'] < 31356926 :
+            sessiondb['session'].delete_one({'sessionid':sessionid})
+            return jsonify({'status':'success','msg':'sessionid deleted'})
         else:
             sessiondb['session'].delete_one({'sessionid':sessionid})
             return jsonify({'status':'error','msg':'sessionid timeout'})
