@@ -11,6 +11,7 @@ signupdb = client['signupdb']
 forgetpassdb = client['forgetpass']
 deleteaccdb = client['deleteacc']
 saltdb = client['salt']
+sessiondb = client['session']
 saltfrom = saltdb['salt'].find({'name':'salt'})
 for i in saltfrom:
     global salt
@@ -224,6 +225,26 @@ def deletesuccess():
     else:
         return abort(404)
 
+@app.route('/login',methods=['POST'])  # type: ignore
+def login():
+    email = request.values['email']
+    password = request.values['password']
+    if email == '':
+        return jsonify({'status':'error','msg':'where is your email????'})
+    if password == '':
+        return jsonify({'status':'error','msg':'where is your password????'})
+    if '@' not in email:
+        return jsonify({'status':'error','msg':'email is not valid'})
+    if userdb['user'].find_one({'email':email}) == None:
+        return jsonify({'status':'error','msg':'account not found'})
+    for i in userdb['user'].find({'email':email}):
+        hashed = bcrypt.hashpw(password.encode('utf-8'),salt)
+        if i['password'] == hashed:
+            randomkey = ''.join(random.choice(string.ascii_letters + string.digits) for x in range(999))
+            sessiondb['session'].insert_one({'email':email,'sessionid':randomkey,'time':time.time()})
+            return jsonify({'status':'success','msg':'login success','sessionid':randomkey})
+        else:
+            return jsonify({'status':'error','msg':'password is wrong'})
 
 if __name__ == '__main__':
     app.run(port=80,host='0.0.0.0',debug=True)
