@@ -103,13 +103,14 @@ def page_not_found(e):
 def test():
     now = round(time.time())
     expires = now - 1800
+    yearexpired = now - 31536000
     for i in signupdb['signup'].find({'time':{'$lt':expires}}):#sign up request expired
         signupdb['signup'].delete_many({'_id':i['_id']})
     for i in forgetpassdb['forgetpass'].find({'time':{'$lt':expires}}):#sign up request expired
         forgetpassdb['forgetpass'].delete_many({'_id':i['_id']})
     for i in deleteaccdb['deleteacc'].find({'time':{'$lt':expires}}):#sign up request expired
         deleteaccdb['deleteacc'].delete_many({'_id':i['_id']})
-    for i in sessiondb['session'].find({'time':{'$lt':expires}}):#sign up request expired
+    for i in sessiondb['session'].find({'time':{'$lt':yearexpired}}):#sign up request expired
         sessiondb['session'].delete_many({'_id':i['_id']})
     return jsonify({'status':'ok'}),200
 
@@ -127,6 +128,7 @@ def reset():
                         hashed = bcrypt.hashpw(request.form['password'].encode('utf-8'),salt)
                         userdb['user'].update_one({'email':i['email']},{'$set':{'password':hashed}})
                         forgetpassdb['forgetpass'].delete_one({'email':i['email']})
+                        sessiondb['session'].delete_many({'email':i['email']})
                         return render_template('resetdone.html')
             else:
                 forgetpassdb['forgetpass'].delete_one({'email':i['email']})
@@ -283,5 +285,27 @@ def deletesession():
             sessiondb['session'].delete_one({'sessionid':sessionid})
             return jsonify({'status':'error','msg':'sessionid timeout'})
 
+
+@app.route('/updatedata',methods=['POST'])
+def updatedata():
+    sessionid = request.values['sessionid']
+    top = request.values['top']
+    middle = request.values['middle']
+    bottom = request.values['bottom']
+    topcolor = request.values['topcolor']
+    middlecolor = request.values['middlecolor']
+    bottomcolor = request.values['bottomcolor']
+    searchprovider = request.values['searchprovider']
+    if sessiondb['session'].find_one({'sessionid':sessionid}) == None:
+        return jsonify({'status':'error','msg':'sessionid not found'})
+    for i in sessiondb['session'].find({'sessionid':sessionid}):
+        if round(time.time()) - i['time'] < 31356926 :
+            email = i['email']
+            userdb['user'].update_one({'email':email},{'$set':{'top':top,'middle':middle,'bottom':bottom,'topcolor':topcolor,'middlecolor':middlecolor,'bottomcolor':bottomcolor,'searchprovider':searchprovider}})
+            return jsonify({'status':'success','msg':'data updated'})
+        else:
+            sessiondb['session'].delete_one({'sessionid':sessionid})
+            return jsonify({'status':'error','msg':'sessionid timeout'})
+
 if __name__ == '__main__':
-    app.run(port=80,host='0.0.0.0',debug=True)
+    app.run(port=80,host='0.0.0.0')
